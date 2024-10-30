@@ -16,7 +16,8 @@ if "authenticated" not in st.session_state:
 
 # Authentication logic
 if not st.session_state.authenticated:
-    st.title("Endorsed by Hawkar Ali Abdulhaq, Szeged University.")
+    st.title("Welcome to Nyerseg Modeling")
+    st.write("Endorsed by Hawkar Ali Abdulhaq, Szeged University.")
     st.write("Please enter the access key to proceed.")
     input_key = st.text_input("Access Key", type="password")
 
