@@ -1,0 +1,7 @@
+streamlit==1.25.0            # Streamlit for creating the web app interface
+folium==0.14.0               # Folium for interactive map creation
+pandas==2.1.1                # Pandas for data manipulation
+geopandas==0.14.0            # GeoPandas for handling geospatial data
+pyproj==3.6.0                # PyProj for coordinate transformation
+shapely==2.0.1               # Shapely for spatial operations and geometry creation
+streamlit-folium==0.12.1     # Streamlit-Folium for integrating Folium maps in Streamlit
