@@ -5,6 +5,8 @@ import geopandas as gpd
 from pyproj import Transformer
 from streamlit_folium import st_folium
 import os
+import zipfile
+from io import BytesIO
 
 st.title("Well Location Analysis with Buffer Zones")
 
@@ -29,9 +31,12 @@ wetland_shp_path = os.path.join(shapefiles_dir, "Wetland_LandCover_Nyerseg_2019"
 # Define paths for additional shapefiles in nov_kulturak
 nov_kulturak_dir = os.path.join(shapefiles_dir, "nov_kulturak")
 torma_shp_path = os.path.join(nov_kulturak_dir, "torma.shp")
-kukorica_shp_path = os.path.join(nov_kulturak_dir, "kukorica.shp")
 dohany1_shp_path = os.path.join(nov_kulturak_dir, "dohany1.shp")
 dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
+
+# **File uploader for kukorica shapefile**
+st.sidebar.header("Upload kukorica Shapefile")
+kukorica_zip = st.sidebar.file_uploader("Upload kukorica shapefile as ZIP", type="zip")
 
 # Sidebar buffer input
 buffer_distance = st.sidebar.number_input("Buffer Distance (meters)", min_value=0, value=50, step=10)
@@ -42,18 +47,33 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
     waterbody_gdf = gpd.read_file(waterbody_shp_path).to_crs(epsg=23700)
     wetland_gdf = gpd.read_file(wetland_shp_path).to_crs(epsg=23700)
     torma_gdf = gpd.read_file(torma_shp_path).to_crs(epsg=23700)
-    kukorica_gdf = gpd.read_file(kukorica_shp_path).to_crs(epsg=23700)
     dohany1_gdf = gpd.read_file(dohany1_shp_path).to_crs(epsg=23700)
     dohany2_gdf = gpd.read_file(dohany2_shp_path).to_crs(epsg=23700)
+
+    # Check if kukorica shapefile is uploaded
+    if kukorica_zip is not None:
+        with zipfile.ZipFile(kukorica_zip) as z:
+            # Extract shapefile components into memory
+            shapefile_members = [f for f in z.namelist() if f.endswith(('.shp', '.shx', '.dbf', '.prj', '.cpg'))]
+            with z.open([f for f in shapefile_members if f.endswith('.shp')][0]) as shp:
+                with z.open([f for f in shapefile_members if f.endswith('.dbf')][0]) as dbf:
+                    with z.open([f for f in shapefile_members if f.endswith('.shx')][0]) as shx:
+                        # Read the shapefile from the in-memory files
+                        kukorica_gdf = gpd.read_file(BytesIO(z.read(shapefile_members[0])))
+            # Set CRS and convert to EPSG:23700
+            kukorica_gdf = kukorica_gdf.to_crs(epsg=23700)
+    else:
+        st.error("Please upload the kukorica shapefile ZIP file to proceed.")
+        st.stop()
 
     # Create buffers
     forest_buffer = forest_gdf.buffer(buffer_distance)
     waterbody_buffer = waterbody_gdf.buffer(buffer_distance)
     wetland_buffer = wetland_gdf.buffer(buffer_distance)
     torma_buffer = torma_gdf.buffer(buffer_distance)
-    kukorica_buffer = kukorica_gdf.buffer(buffer_distance)
     dohany1_buffer = dohany1_gdf.buffer(buffer_distance)
     dohany2_buffer = dohany2_gdf.buffer(buffer_distance)
+    kukorica_buffer = kukorica_gdf.buffer(buffer_distance)
 
     # Combine all buffers into one GeoSeries
     combined_buffer = gpd.GeoSeries(pd.concat([
