@@ -4,4 +4,4 @@ pandas
 geopandas
 pyproj
 shapely
-streamlit-folium
+streamlit_folium
