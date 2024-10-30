@@ -36,14 +36,15 @@ dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
 
 # Define the Google Drive IDs for the kukorica shapefile components
 kukorica_file_ids = {
-    'shp': '1Nl1eG8iV3Ic4zxB2dGsCkKpGB5x6yLjv',
-    'shx': '1-OqXB7iOVRb4w1CtwUYdXxbl6BftgYeU',
-    'dbf': '1N-FL1G2FB28yafTWKaPtYHpxq8vEEx9g',
-    'prj': '1N5ybmUI2etLrPA40mlJAXm_7ssBE0PX2',
-    'cpg': '1NJJpshw25ig1HFd8bFIYCCUMZkBvE_zR',
-    'sbn': '1Ne1pZG4V8NHvK3m5A59epB5YXJMWoXkV',
-    'sbx': '1Np98sfODtEhLMjX3xvP8YNeiD2VKKNRm'
+    'shp': '1nWPuABDefjUQPnlFWdvKdh7LbKMpew12',
+    'shx': '1UwgSv0ybs-h3glpV20T0o3auwnhTnzbi',
+    'dbf': '1YYD6fXSNTdELqzUE3Qa-pWx2tlqq2vls',
+    'prj': '1twtD8xlmkhX8koJgarkI8kjfbFU6awOC',
+    'cpg': '1KsDzeR1_6HxvsIeDPsyz8VgkRm0ZVWnR',
+    'sbn': '1ENeEp6N-Vxv30baf_Wo32Xs_ojx8OC9p',
+    'sbx': '1l2vzPlPW7pq2fNlJ4h45QLHvpsfdi0mc'
 }
+
 
 kukorica_files = {}
 kukorica_shp_dir = os.path.join(BASE_DIR, "kukorica_shp")
