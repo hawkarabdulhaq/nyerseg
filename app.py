@@ -6,7 +6,8 @@ from pyproj import Transformer
 from streamlit_folium import st_folium
 import os
 import requests
-from zipfile import ZipFile
+import zipfile
+from io import BytesIO
 
 st.title("Well Location Analysis with Buffer Zones")
 
@@ -33,48 +34,51 @@ nov_kulturak_dir = os.path.join(shapefiles_dir, "nov_kulturak")
 torma_shp_path = os.path.join(nov_kulturak_dir, "torma.shp")
 dohany1_shp_path = os.path.join(nov_kulturak_dir, "dohany1.shp")
 dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
+
+# URL for kukorica shapefile ZIP from Zenodo
+kukorica_zip_url = "https://zenodo.org/record/14012851/files/kukorica.zip?download=1"
+
+# Path where kukorica shapefile will be stored
 kukorica_shp_path = os.path.join(nov_kulturak_dir, "kukorica.shp")
 
-# URL to download kukorica.shp if not present
-zenodo_url = "https://zenodo.org/record/14012851/files/kukorica_shapefile.zip"
-
-# Download kukorica shapefile if missing
-if not os.path.exists(kukorica_shp_path):
-    st.info("Downloading kukorica shapefile from Zenodo...")
-    response = requests.get(zenodo_url)
-    zip_path = os.path.join(nov_kulturak_dir, "kukorica_shapefile.zip")
-    
-    with open(zip_path, "wb") as file:
-        file.write(response.content)
-    
-    # Extract the shapefile
-    with ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(nov_kulturak_dir)
-    
-    # Clean up the zip file
-    os.remove(zip_path)
+# Function to download and extract kukorica shapefile
+def download_kukorica_shapefile():
+    if not os.path.exists(kukorica_shp_path):
+        st.info("Downloading kukorica shapefile...")
+        os.makedirs(nov_kulturak_dir, exist_ok=True)
+        response = requests.get(kukorica_zip_url)
+        if response.status_code == 200:
+            with zipfile.ZipFile(BytesIO(response.content)) as z:
+                z.extractall(nov_kulturak_dir)
+            st.success("kukorica shapefile downloaded and extracted successfully.")
+        else:
+            st.error("Failed to download kukorica shapefile.")
+            st.stop()
 
 # Sidebar buffer input
 buffer_distance = st.sidebar.number_input("Buffer Distance (meters)", min_value=0, value=50, step=10)
 
 if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
+    # Ensure kukorica shapefile is available
+    download_kukorica_shapefile()
+
     # Load shapefiles and convert to EOV CRS
     forest_gdf = gpd.read_file(forest_shp_path).to_crs(epsg=23700)
     waterbody_gdf = gpd.read_file(waterbody_shp_path).to_crs(epsg=23700)
     wetland_gdf = gpd.read_file(wetland_shp_path).to_crs(epsg=23700)
     torma_gdf = gpd.read_file(torma_shp_path).to_crs(epsg=23700)
-    kukorica_gdf = gpd.read_file(kukorica_shp_path).to_crs(epsg=23700)
     dohany1_gdf = gpd.read_file(dohany1_shp_path).to_crs(epsg=23700)
     dohany2_gdf = gpd.read_file(dohany2_shp_path).to_crs(epsg=23700)
+    kukorica_gdf = gpd.read_file(kukorica_shp_path).to_crs(epsg=23700)
 
     # Create buffers
     forest_buffer = forest_gdf.buffer(buffer_distance)
     waterbody_buffer = waterbody_gdf.buffer(buffer_distance)
     wetland_buffer = wetland_gdf.buffer(buffer_distance)
     torma_buffer = torma_gdf.buffer(buffer_distance)
-    kukorica_buffer = kukorica_gdf.buffer(buffer_distance)
     dohany1_buffer = dohany1_gdf.buffer(buffer_distance)
     dohany2_buffer = dohany2_gdf.buffer(buffer_distance)
+    kukorica_buffer = kukorica_gdf.buffer(buffer_distance)
 
     # Combine all buffers into one GeoSeries
     combined_buffer = gpd.GeoSeries(pd.concat([
@@ -82,9 +86,9 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
         waterbody_buffer,
         wetland_buffer,
         torma_buffer,
-        kukorica_buffer,
         dohany1_buffer,
-        dohany2_buffer
+        dohany2_buffer,
+        kukorica_buffer
     ], ignore_index=True))
 
     # Set the CRS for combined_buffer
