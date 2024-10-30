@@ -5,8 +5,10 @@ import geopandas as gpd
 from pyproj import Transformer
 from streamlit_folium import st_folium
 import os
-import gdown
-import zipfile
+import io
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 st.title("Well Location Analysis with Buffer Zones")
 
@@ -34,7 +36,7 @@ torma_shp_path = os.path.join(nov_kulturak_dir, "torma.shp")
 dohany1_shp_path = os.path.join(nov_kulturak_dir, "dohany1.shp")
 dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
 
-# Define the Google Drive IDs for the kukorica shapefile components
+# Google Drive file IDs for the kukorica shapefile components
 kukorica_file_ids = {
     'shp': '1nWPuABDefjUQPnlFWdvKdh7LbKMpew12',
     'shx': '1UwgSv0ybs-h3glpV20T0o3auwnhTnzbi',
@@ -45,25 +47,41 @@ kukorica_file_ids = {
     'sbx': '1l2vzPlPW7pq2fNlJ4h45QLHvpsfdi0mc'
 }
 
+# Authenticate and build the Google Drive service
+def authenticate_gdrive():
+    credentials = service_account.Credentials.from_service_account_file(
+        'service_account_key.json',
+        scopes=['https://www.googleapis.com/auth/drive']
+    )
+    service = build('drive', 'v3', credentials=credentials)
+    return service
 
-kukorica_files = {}
+# Download files from Google Drive
+def download_kukorica_files(service, file_ids, download_dir):
+    os.makedirs(download_dir, exist_ok=True)
+    for ext, file_id in file_ids.items():
+        request = service.files().get_media(fileId=file_id)
+        fh = io.FileIO(os.path.join(download_dir, f'kukorica.{ext}'), 'wb')
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+            st.write(f"Downloading kukorica.{ext}: {int(status.progress() * 100)}%")
+        fh.close()
+
 kukorica_shp_dir = os.path.join(BASE_DIR, "kukorica_shp")
-os.makedirs(kukorica_shp_dir, exist_ok=True)
-
-# Download the kukorica shapefile components
-for ext, file_id in kukorica_file_ids.items():
-    url = f"https://drive.google.com/uc?id={file_id}"
-    output = os.path.join(kukorica_shp_dir, f"kukorica.{ext}")
-    gdown.download(url, output, quiet=False)
-    kukorica_files[ext] = output
-
-# Path to kukorica shapefile
-kukorica_shp_path = kukorica_files['shp']
+kukorica_shp_path = os.path.join(kukorica_shp_dir, "kukorica.shp")
 
 # Sidebar buffer input
 buffer_distance = st.sidebar.number_input("Buffer Distance (meters)", min_value=0, value=50, step=10)
 
 if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
+    # Authenticate and download kukorica files
+    st.write("Authenticating with Google Drive API...")
+    service = authenticate_gdrive()
+    st.write("Downloading kukorica shapefile components...")
+    download_kukorica_files(service, kukorica_file_ids, kukorica_shp_dir)
+
     # Load shapefiles and convert to EOV CRS
     forest_gdf = gpd.read_file(forest_shp_path).to_crs(epsg=23700)
     waterbody_gdf = gpd.read_file(waterbody_shp_path).to_crs(epsg=23700)
