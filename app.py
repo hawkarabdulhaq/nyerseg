@@ -1,9 +1,9 @@
 import streamlit as st
 import folium
 import pandas as pd
-import geopandas as gpd
-from pyproj import Transformer
 from streamlit_folium import st_folium
+from load_data import load_shapefile_with_crs, load_well_data
+from process_data import create_buffers, filter_wells, convert_coordinates
 import os
 
 st.title("Well Location Analysis with Buffer Zones")
@@ -13,7 +13,7 @@ This application filters new well locations by excluding those within buffer zon
 """)
 
 # Set up file paths
-BASE_DIR = os.getcwd()  # Assuming current working directory is root of project
+BASE_DIR = os.getcwd()
 wells_dir = os.path.join(BASE_DIR, "wells")
 shapefiles_dir = os.path.join(BASE_DIR, "shapefiles")
 
@@ -25,27 +25,16 @@ newlywells_path = os.path.join(wells_dir, "newlywells.txt")
 forest_shp_path = os.path.join(shapefiles_dir, "Forest_LandCover_Nyerseg_2019", "Forest_LandCover_Nyerseg_2019.shp")
 waterbody_shp_path = os.path.join(shapefiles_dir, "WaterBody_LandCover_Nyerseg_2019", "WaterBody_LandCover_Nyerseg_2019.shp")
 wetland_shp_path = os.path.join(shapefiles_dir, "Wetland_LandCover_Nyerseg_2019", "Wetland_LandCover_Nyerseg_2019.shp")
-
-# Define paths for additional shapefiles in nov_kulturak
-nov_kulturak_dir = os.path.join(shapefiles_dir, "nov_kulturak")
-torma_shp_path = os.path.join(nov_kulturak_dir, "torma.shp")
-kukorica_shp_path = os.path.join(nov_kulturak_dir, "kukorica.shp")
-dohany1_shp_path = os.path.join(nov_kulturak_dir, "dohany1.shp")
-dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
+torma_shp_path = os.path.join(shapefiles_dir, "nov_kulturak", "torma.shp")
+kukorica_shp_path = os.path.join(shapefiles_dir, "nov_kulturak", "kukorica.shp")
+dohany1_shp_path = os.path.join(shapefiles_dir, "nov_kulturak", "dohany1.shp")
+dohany2_shp_path = os.path.join(shapefiles_dir, "nov_kulturak", "dohany2.shp")
 
 # Sidebar buffer input
 buffer_distance = st.sidebar.number_input("Buffer Distance (meters)", min_value=0, value=50, step=10)
 
-# Function to load a shapefile and ensure it has a CRS
-def load_shapefile_with_crs(filepath, target_crs="EPSG:23700"):
-    gdf = gpd.read_file(filepath)
-    if gdf.crs is None:
-        # Set the initial CRS if it's missing
-        gdf.set_crs(epsg=23700, inplace=True)
-    return gdf.to_crs(target_crs)
-
 if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
-    # Load shapefiles and ensure CRS is set and converted to EOV CRS
+    # Load shapefiles
     forest_gdf = load_shapefile_with_crs(forest_shp_path)
     waterbody_gdf = load_shapefile_with_crs(waterbody_shp_path)
     wetland_gdf = load_shapefile_with_crs(wetland_shp_path)
@@ -53,112 +42,48 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
     kukorica_gdf = load_shapefile_with_crs(kukorica_shp_path)
     dohany1_gdf = load_shapefile_with_crs(dohany1_shp_path)
     dohany2_gdf = load_shapefile_with_crs(dohany2_shp_path)
-
+    
     # Create buffers
-    forest_buffer = forest_gdf.buffer(buffer_distance)
-    waterbody_buffer = waterbody_gdf.buffer(buffer_distance)
-    wetland_buffer = wetland_gdf.buffer(buffer_distance)
-    torma_buffer = torma_gdf.buffer(buffer_distance)
-    kukorica_buffer = kukorica_gdf.buffer(buffer_distance)
-    dohany1_buffer = dohany1_gdf.buffer(buffer_distance)
-    dohany2_buffer = dohany2_gdf.buffer(buffer_distance)
-
-    # Combine all buffers into one GeoSeries
-    combined_buffer = gpd.GeoSeries(pd.concat([
-        forest_buffer,
-        waterbody_buffer,
-        wetland_buffer,
-        torma_buffer,
-        kukorica_buffer,
-        dohany1_buffer,
-        dohany2_buffer
-    ], ignore_index=True))
-
-    # Set the CRS for combined_buffer
-    combined_buffer.crs = "EPSG:23700"
-
-    # Read the well data
-    realwells_df = pd.read_csv(realwells_path, delimiter='\t', header=None, names=['EOV_X', 'EOV_Y'])
-    newlywells_df = pd.read_csv(newlywells_path, delimiter='\t', header=None, names=['EOV_X', 'EOV_Y'])
-
-    # Initialize the EOV to WGS84 transformer
-    transformer = Transformer.from_crs("EPSG:23700", "EPSG:4326")
-
-    # Convert coordinates and create GeoDataFrames
-    realwells_gdf = gpd.GeoDataFrame(
-        realwells_df,
-        geometry=gpd.points_from_xy(realwells_df.EOV_X, realwells_df.EOV_Y),
-        crs="EPSG:23700"
-    )
-
-    newlywells_gdf = gpd.GeoDataFrame(
-        newlywells_df,
-        geometry=gpd.points_from_xy(newlywells_df.EOV_X, newlywells_df.EOV_Y),
-        crs="EPSG:23700"
-    )
-
-    # Ensure CRS matches
-    if combined_buffer.crs != newlywells_gdf.crs:
-        combined_buffer = combined_buffer.set_crs(newlywells_gdf.crs, allow_override=True)
-
-    # Check if wells are within the buffer areas
-    def is_within_buffers(point):
-        return combined_buffer.intersects(point).any()
-
-    # Filter out wells that are within the buffers and create a copy
-    filtered_newlywells_gdf = newlywells_gdf[~newlywells_gdf.geometry.apply(is_within_buffers)].copy()
-
+    combined_buffer = create_buffers([
+        forest_gdf, waterbody_gdf, wetland_gdf, torma_gdf, kukorica_gdf, dohany1_gdf, dohany2_gdf
+    ], buffer_distance)
+    
+    # Load and prepare well data
+    realwells_gdf, newlywells_gdf = load_well_data(realwells_path, newlywells_path)
+    
+    # Filter newly wells within buffers
+    filtered_newlywells_gdf = filter_wells(newlywells_gdf, combined_buffer)
+    
     if filtered_newlywells_gdf.empty:
         st.warning("No wells remain after filtering. Adjust the buffer distance or check your data.")
         st.stop()
 
-    # Function to convert EOV to Lat/Lon
-    def eov_to_latlon(eov_x, eov_y):
-        lat, lon = transformer.transform(eov_x, eov_y)
-        return pd.Series({'Latitude': lat, 'Longitude': lon})
-
-    # Convert filtered coordinates to WGS84
-    filtered_newlywells_gdf.loc[:, ['Latitude', 'Longitude']] = filtered_newlywells_gdf.apply(
-        lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
-    )
-
-    realwells_gdf.loc[:, ['Latitude', 'Longitude']] = realwells_gdf.apply(
-        lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
-    )
+    # Convert coordinates to WGS84 for visualization
+    realwells_gdf, filtered_newlywells_gdf = convert_coordinates(realwells_gdf, filtered_newlywells_gdf)
 
     # Create a Folium map centered around an average location
     center_lat = (realwells_gdf['Latitude'].mean() + filtered_newlywells_gdf['Latitude'].mean()) / 2
     center_lon = (realwells_gdf['Longitude'].mean() + filtered_newlywells_gdf['Longitude'].mean()) / 2
-
-    if pd.isnull(center_lat) or pd.isnull(center_lon):
-        st.error("Center coordinates are invalid. Cannot create map.")
-        st.stop()
-
     wells_map = folium.Map(location=[center_lat, center_lon], zoom_start=10)
 
-    # Add real wells to the map
+    # Add real wells and filtered new wells to the map
     for index, row in realwells_gdf.iterrows():
-        if pd.notnull(row['Latitude']) and pd.notnull(row['Longitude']):
-            folium.CircleMarker(
-                location=(row['Latitude'], row['Longitude']),
-                radius=2,
-                color='red',
-                fill=True,
-                fill_color='red',
-                fill_opacity=0.6
-            ).add_to(wells_map)
+        folium.CircleMarker(
+            location=(row['Latitude'], row['Longitude']),
+            radius=2,
+            color='red',
+            fill=True,
+            fill_opacity=0.6
+        ).add_to(wells_map)
 
-    # Add filtered new wells to the map
     for index, row in filtered_newlywells_gdf.iterrows():
-        if pd.notnull(row['Latitude']) and pd.notnull(row['Longitude']):
-            folium.CircleMarker(
-                location=(row['Latitude'], row['Longitude']),
-                radius=2,
-                color='blue',
-                fill=True,
-                fill_color='blue',
-                fill_opacity=0.6
-            ).add_to(wells_map)
+        folium.CircleMarker(
+            location=(row['Latitude'], row['Longitude']),
+            radius=2,
+            color='blue',
+            fill=True,
+            fill_opacity=0.6
+        ).add_to(wells_map)
 
     # Save filtered data and map in session state
     st.session_state['filtered_data'] = filtered_newlywells_gdf[['EOV_X', 'EOV_Y', 'Latitude', 'Longitude']]
@@ -169,7 +94,7 @@ if 'map' in st.session_state:
     st.subheader("Filtered Wells Map")
     st_folium(st.session_state['map'], width=700, height=500)
 
-# Prepare and display the download button if data is available
+# Download button for CSV data
 if 'filtered_data' in st.session_state:
     csv = st.session_state['filtered_data'].to_csv(index=False)
     st.subheader("Download Filtered Wells Data")
