@@ -37,14 +37,14 @@ dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
 buffer_distance = st.sidebar.number_input("Buffer Distance (meters)", min_value=0, value=50, step=10)
 
 if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
-    # Load shapefiles and convert to EOV CRS
-    forest_gdf = gpd.read_file(forest_shp_path).to_crs(epsg=23700)
-    waterbody_gdf = gpd.read_file(waterbody_shp_path).to_crs(epsg=23700)
-    wetland_gdf = gpd.read_file(wetland_shp_path).to_crs(epsg=23700)
-    torma_gdf = gpd.read_file(torma_shp_path).to_crs(epsg=23700)
-    kukorica_gdf = gpd.read_file(kukorica_shp_path).to_crs(epsg=23700)
-    dohany1_gdf = gpd.read_file(dohany1_shp_path).to_crs(epsg=23700)
-    dohany2_gdf = gpd.read_file(dohany2_shp_path).to_crs(epsg=23700)
+    # Load shapefiles, set CRS, and convert to EOV CRS
+    forest_gdf = gpd.read_file(forest_shp_path).set_crs(epsg=23700).to_crs(epsg=23700)
+    waterbody_gdf = gpd.read_file(waterbody_shp_path).set_crs(epsg=23700).to_crs(epsg=23700)
+    wetland_gdf = gpd.read_file(wetland_shp_path).set_crs(epsg=23700).to_crs(epsg=23700)
+    torma_gdf = gpd.read_file(torma_shp_path).set_crs(epsg=23700).to_crs(epsg=23700)
+    kukorica_gdf = gpd.read_file(kukorica_shp_path).set_crs(epsg=23700).to_crs(epsg=23700)
+    dohany1_gdf = gpd.read_file(dohany1_shp_path).set_crs(epsg=23700).to_crs(epsg=23700)
+    dohany2_gdf = gpd.read_file(dohany2_shp_path).set_crs(epsg=23700).to_crs(epsg=23700)
 
     # Create buffers
     forest_buffer = forest_gdf.buffer(buffer_distance)
@@ -67,7 +67,7 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
     ], ignore_index=True))
 
     # Set the CRS for combined_buffer
-    combined_buffer.crs = "EPSG:23700"
+    combined_buffer.set_crs(epsg=23700, inplace=True)
 
     # Read the well data
     realwells_df = pd.read_csv(realwells_path, delimiter='\t', header=None, names=['EOV_X', 'EOV_Y'])
