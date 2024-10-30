@@ -154,11 +154,11 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
         return pd.Series({'Latitude': lat, 'Longitude': lon})
 
     # Convert filtered coordinates to WGS84
-    filtered_newlywells_gdf.loc[:, ['Latitude', 'Longitude']] = filtered_newlywells_gdf.apply(
+    filtered_newlywells_gdf[['Latitude', 'Longitude']] = filtered_newlywells_gdf.apply(
         lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
     )
 
-    realwells_gdf.loc[:, ['Latitude', 'Longitude']] = realwells_gdf.apply(
+    realwells_gdf[['Latitude', 'Longitude']] = realwells_gdf.apply(
         lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
     )
 
