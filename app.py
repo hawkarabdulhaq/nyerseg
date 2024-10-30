@@ -5,10 +5,6 @@ import geopandas as gpd
 from pyproj import Transformer
 from streamlit_folium import st_folium
 import os
-import requests
-import zipfile
-import io
-import glob
 
 st.title("Well Location Analysis with Buffer Zones")
 
@@ -33,65 +29,22 @@ wetland_shp_path = os.path.join(shapefiles_dir, "Wetland_LandCover_Nyerseg_2019"
 # Define paths for additional shapefiles in nov_kulturak
 nov_kulturak_dir = os.path.join(shapefiles_dir, "nov_kulturak")
 torma_shp_path = os.path.join(nov_kulturak_dir, "torma.shp")
+kukorica_shp_path = os.path.join(nov_kulturak_dir, "kukorica.shp")
 dohany1_shp_path = os.path.join(nov_kulturak_dir, "dohany1.shp")
 dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
-
-# For kukorica.shp, define the path and the correct download URL
-kukorica_shp_path = os.path.join(nov_kulturak_dir, "kukorica.shp")
-kukorica_zip_url = "https://zenodo.org/record/14012851/files/kukorica.zip?download=1"
-
-# Check if kukorica.shp exists, if not, download and extract it
-if not os.path.exists(kukorica_shp_path):
-    st.write("Downloading kukorica shapefile...")
-    try:
-        # Make sure the directory exists
-        os.makedirs(nov_kulturak_dir, exist_ok=True)
-        # Download the zip file
-        response = requests.get(kukorica_zip_url)
-        response.raise_for_status()  # Check if the download was successful
-        # Extract the zip file
-        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-            z.extractall(nov_kulturak_dir)
-        st.write("kukorica shapefile downloaded and extracted.")
-
-        # Check if all required files are present
-        extracted_files = glob.glob(os.path.join(nov_kulturak_dir, 'kukorica.*'))
-        required_extensions = ['.shp', '.shx', '.dbf', '.prj']
-        missing_files = []
-
-        for ext in required_extensions:
-            if not any(f.endswith(ext) for f in extracted_files):
-                missing_files.append(f'kukorica{ext}')
-
-        if missing_files:
-            st.error(f"Missing files after extraction: {', '.join(missing_files)}")
-            st.stop()
-
-    except Exception as e:
-        st.error(f"An error occurred while downloading kukorica shapefile: {e}")
-        st.stop()
 
 # Sidebar buffer input
 buffer_distance = st.sidebar.number_input("Buffer Distance (meters)", min_value=0, value=50, step=10)
 
 if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
-
-    # Load shapefiles and ensure CRS is set
-    def load_shapefile(path):
-        gdf = gpd.read_file(path)
-        if gdf.crs is None:
-            gdf.set_crs(epsg=23700, inplace=True)
-        else:
-            gdf = gdf.to_crs(epsg=23700)
-        return gdf
-
-    forest_gdf = load_shapefile(forest_shp_path)
-    waterbody_gdf = load_shapefile(waterbody_shp_path)
-    wetland_gdf = load_shapefile(wetland_shp_path)
-    torma_gdf = load_shapefile(torma_shp_path)
-    kukorica_gdf = load_shapefile(kukorica_shp_path)
-    dohany1_gdf = load_shapefile(dohany1_shp_path)
-    dohany2_gdf = load_shapefile(dohany2_shp_path)
+    # Load shapefiles and convert to EOV CRS
+    forest_gdf = gpd.read_file(forest_shp_path).to_crs(epsg=23700)
+    waterbody_gdf = gpd.read_file(waterbody_shp_path).to_crs(epsg=23700)
+    wetland_gdf = gpd.read_file(wetland_shp_path).to_crs(epsg=23700)
+    torma_gdf = gpd.read_file(torma_shp_path).to_crs(epsg=23700)
+    kukorica_gdf = gpd.read_file(kukorica_shp_path).to_crs(epsg=23700)
+    dohany1_gdf = gpd.read_file(dohany1_shp_path).to_crs(epsg=23700)
+    dohany2_gdf = gpd.read_file(dohany2_shp_path).to_crs(epsg=23700)
 
     # Create buffers
     forest_buffer = forest_gdf.buffer(buffer_distance)
@@ -112,6 +65,9 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
         dohany1_buffer,
         dohany2_buffer
     ], ignore_index=True))
+
+    # Set the CRS for combined_buffer
+    combined_buffer.crs = "EPSG:23700"
 
     # Read the well data
     realwells_df = pd.read_csv(realwells_path, delimiter='\t', header=None, names=['EOV_X', 'EOV_Y'])
@@ -139,7 +95,7 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
 
     # Check if wells are within the buffer areas
     def is_within_buffers(point):
-        return combined_buffer.contains(point).any()
+        return combined_buffer.intersects(point).any()
 
     # Filter out wells that are within the buffers and create a copy
     filtered_newlywells_gdf = newlywells_gdf[~newlywells_gdf.geometry.apply(is_within_buffers)].copy()
@@ -154,11 +110,11 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
         return pd.Series({'Latitude': lat, 'Longitude': lon})
 
     # Convert filtered coordinates to WGS84
-    filtered_newlywells_gdf[['Latitude', 'Longitude']] = filtered_newlywells_gdf.apply(
+    filtered_newlywells_gdf.loc[:, ['Latitude', 'Longitude']] = filtered_newlywells_gdf.apply(
         lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
     )
 
-    realwells_gdf[['Latitude', 'Longitude']] = realwells_gdf.apply(
+    realwells_gdf.loc[:, ['Latitude', 'Longitude']] = realwells_gdf.apply(
         lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
     )
 
