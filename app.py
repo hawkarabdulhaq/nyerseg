@@ -74,18 +74,34 @@ if not os.path.exists(kukorica_shp_path):
         st.error(f"An error occurred while downloading kukorica shapefile: {e}")
         st.stop()
 
+# Function to load and transform shapefiles
+def load_and_transform_shapefile(shp_path, target_crs, source_crs=None):
+    gdf = gpd.read_file(shp_path)
+    if gdf.crs is None:
+        if source_crs is not None:
+            gdf.set_crs(source_crs, inplace=True)
+            st.warning(f"CRS was missing for {shp_path}. Set to {source_crs}.")
+        else:
+            st.error(f"CRS is missing for {shp_path} and source_crs is not provided.")
+            st.stop()
+    gdf = gdf.to_crs(target_crs)
+    return gdf
+
 # Sidebar buffer input
 buffer_distance = st.sidebar.number_input("Buffer Distance (meters)", min_value=0, value=50, step=10)
 
 if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
-    # Load shapefiles and convert to EOV CRS
-    forest_gdf = gpd.read_file(forest_shp_path).to_crs(epsg=23700)
-    waterbody_gdf = gpd.read_file(waterbody_shp_path).to_crs(epsg=23700)
-    wetland_gdf = gpd.read_file(wetland_shp_path).to_crs(epsg=23700)
-    torma_gdf = gpd.read_file(torma_shp_path).to_crs(epsg=23700)
-    kukorica_gdf = gpd.read_file(kukorica_shp_path).to_crs(epsg=23700)
-    dohany1_gdf = gpd.read_file(dohany1_shp_path).to_crs(epsg=23700)
-    dohany2_gdf = gpd.read_file(dohany2_shp_path).to_crs(epsg=23700)
+    # Target CRS
+    target_crs = 'EPSG:23700'
+
+    # Load and transform shapefiles
+    forest_gdf = load_and_transform_shapefile(forest_shp_path, target_crs, source_crs='EPSG:23700')
+    waterbody_gdf = load_and_transform_shapefile(waterbody_shp_path, target_crs, source_crs='EPSG:23700')
+    wetland_gdf = load_and_transform_shapefile(wetland_shp_path, target_crs, source_crs='EPSG:23700')
+    torma_gdf = load_and_transform_shapefile(torma_shp_path, target_crs, source_crs='EPSG:23700')
+    kukorica_gdf = load_and_transform_shapefile(kukorica_shp_path, target_crs, source_crs='EPSG:23700')
+    dohany1_gdf = load_and_transform_shapefile(dohany1_shp_path, target_crs, source_crs='EPSG:23700')
+    dohany2_gdf = load_and_transform_shapefile(dohany2_shp_path, target_crs, source_crs='EPSG:23700')
 
     # Create buffers
     forest_buffer = forest_gdf.buffer(buffer_distance)
@@ -105,10 +121,7 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
         kukorica_buffer,
         dohany1_buffer,
         dohany2_buffer
-    ], ignore_index=True))
-
-    # Set the CRS for combined_buffer
-    combined_buffer.crs = "EPSG:23700"
+    ], ignore_index=True), crs=target_crs)
 
     # Read the well data
     realwells_df = pd.read_csv(realwells_path, delimiter='\t', header=None, names=['EOV_X', 'EOV_Y'])
@@ -129,10 +142,6 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
         geometry=gpd.points_from_xy(newlywells_df.EOV_X, newlywells_df.EOV_Y),
         crs="EPSG:23700"
     )
-
-    # Ensure CRS matches
-    if combined_buffer.crs != newlywells_gdf.crs:
-        combined_buffer = combined_buffer.set_crs(newlywells_gdf.crs, allow_override=True)
 
     # Check if wells are within the buffer areas
     def is_within_buffers(point):
