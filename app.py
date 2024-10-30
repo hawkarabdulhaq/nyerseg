@@ -133,4 +133,84 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
     # Convert coordinates and create GeoDataFrames
     realwells_gdf = gpd.GeoDataFrame(
         realwells_df,
-        geometry=gpd.points_from_xy(realwells_df.EOV_X, 
+        geometry=gpd.points_from_xy(realwells_df.EOV_X, realwells_df.EOV_Y),
+        crs="EPSG:23700"
+    )
+
+    newlywells_gdf = gpd.GeoDataFrame(
+        newlywells_df,
+        geometry=gpd.points_from_xy(newlywells_df.EOV_X, newlywells_df.EOV_Y),
+        crs="EPSG:23700"
+    )
+
+    # Ensure CRS matches
+    if combined_buffer.crs != newlywells_gdf.crs:
+        combined_buffer = combined_buffer.set_crs(newlywells_gdf.crs, allow_override=True)
+
+    # Filter out wells within buffer
+    def is_within_buffers(point):
+        return combined_buffer.intersects(point).any()
+
+    filtered_newlywells_gdf = newlywells_gdf[~newlywells_gdf.geometry.apply(is_within_buffers)].copy()
+
+    if filtered_newlywells_gdf.empty:
+        st.warning("No wells remain after filtering. Adjust the buffer distance or check your data.")
+        st.stop()
+
+    # Convert EOV to Lat/Lon
+    def eov_to_latlon(eov_x, eov_y):
+        lat, lon = transformer.transform(eov_x, eov_y)
+        return pd.Series({'Latitude': lat, 'Longitude': lon})
+
+    filtered_newlywells_gdf[['Latitude', 'Longitude']] = filtered_newlywells_gdf.apply(
+        lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
+    )
+
+    realwells_gdf[['Latitude', 'Longitude']] = realwells_gdf.apply(
+        lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
+    )
+
+    # Create a Folium map centered around an average location
+    center_lat = (realwells_gdf['Latitude'].mean() + filtered_newlywells_gdf['Latitude'].mean()) / 2
+    center_lon = (realwells_gdf['Longitude'].mean() + filtered_newlywells_gdf['Longitude'].mean()) / 2
+
+    wells_map = folium.Map(location=[center_lat, center_lon], zoom_start=10)
+
+    # Add real wells to the map
+    for index, row in realwells_gdf.iterrows():
+        folium.CircleMarker(
+            location=(row['Latitude'], row['Longitude']),
+            radius=2,
+            color='red',
+            fill=True,
+            fill_color='red',
+            fill_opacity=0.6
+        ).add_to(wells_map)
+
+    # Add filtered new wells to the map
+    for index, row in filtered_newlywells_gdf.iterrows():
+        folium.CircleMarker(
+            location=(row['Latitude'], row['Longitude']),
+            radius=2,
+            color='blue',
+            fill=True,
+            fill_color='blue',
+            fill_opacity=0.6
+        ).add_to(wells_map)
+
+    st.session_state['filtered_data'] = filtered_newlywells_gdf[['EOV_X', 'EOV_Y', 'Latitude', 'Longitude']]
+    st.session_state['map'] = wells_map
+
+if 'map' in st.session_state:
+    st.subheader("Filtered Wells Map")
+    st_folium(st.session_state['map'], width=700, height=500)
+
+if 'filtered_data' in st.session_state:
+    csv = st.session_state['filtered_data'].to_csv(index=False)
+    st.subheader("Download Filtered Wells Data")
+    st.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name='filtered_newlywells.csv',
+        mime='text/csv'
+    )
