@@ -5,4 +5,7 @@ geopandas
 pyproj
 shapely
 streamlit_folium
-gdown
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
