@@ -159,4 +159,59 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
     )
 
     realwells_gdf.loc[:, ['Latitude', 'Longitude']] = realwells_gdf.apply(
-        lambda row: eov_to_latlon(row.geometry
+        lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
+    )
+
+    # Create a Folium map centered around an average location
+    center_lat = (realwells_gdf['Latitude'].mean() + filtered_newlywells_gdf['Latitude'].mean()) / 2
+    center_lon = (realwells_gdf['Longitude'].mean() + filtered_newlywells_gdf['Longitude'].mean()) / 2
+
+    if pd.isnull(center_lat) or pd.isnull(center_lon):
+        st.error("Center coordinates are invalid. Cannot create map.")
+        st.stop()
+
+    wells_map = folium.Map(location=[center_lat, center_lon], zoom_start=10)
+
+    # Add real wells to the map
+    for index, row in realwells_gdf.iterrows():
+        if pd.notnull(row['Latitude']) and pd.notnull(row['Longitude']):
+            folium.CircleMarker(
+                location=(row['Latitude'], row['Longitude']),
+                radius=2,
+                color='red',
+                fill=True,
+                fill_color='red',
+                fill_opacity=0.6
+            ).add_to(wells_map)
+
+    # Add filtered new wells to the map
+    for index, row in filtered_newlywells_gdf.iterrows():
+        if pd.notnull(row['Latitude']) and pd.notnull(row['Longitude']):
+            folium.CircleMarker(
+                location=(row['Latitude'], row['Longitude']),
+                radius=2,
+                color='blue',
+                fill=True,
+                fill_color='blue',
+                fill_opacity=0.6
+            ).add_to(wells_map)
+
+    # Save filtered data and map in session state
+    st.session_state['filtered_data'] = filtered_newlywells_gdf[['EOV_X', 'EOV_Y', 'Latitude', 'Longitude']]
+    st.session_state['map'] = wells_map
+
+# Display the map if it exists in session state
+if 'map' in st.session_state:
+    st.subheader("Filtered Wells Map")
+    st_folium(st.session_state['map'], width=700, height=500)
+
+# Prepare and display the download button if data is available
+if 'filtered_data' in st.session_state:
+    csv = st.session_state['filtered_data'].to_csv(index=False)
+    st.subheader("Download Filtered Wells Data")
+    st.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name='filtered_newlywells.csv',
+        mime='text/csv'
+    )
