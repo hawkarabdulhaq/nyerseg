@@ -36,15 +36,23 @@ dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
 # Sidebar buffer input
 buffer_distance = st.sidebar.number_input("Buffer Distance (meters)", min_value=0, value=50, step=10)
 
+# Function to load a shapefile and ensure it has a CRS
+def load_shapefile_with_crs(filepath, target_crs="EPSG:23700"):
+    gdf = gpd.read_file(filepath)
+    if gdf.crs is None:
+        # Set the initial CRS if it's missing
+        gdf.set_crs(epsg=23700, inplace=True)
+    return gdf.to_crs(target_crs)
+
 if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
-    # Load shapefiles and convert to EOV CRS
-    forest_gdf = gpd.read_file(forest_shp_path).to_crs(epsg=23700)
-    waterbody_gdf = gpd.read_file(waterbody_shp_path).to_crs(epsg=23700)
-    wetland_gdf = gpd.read_file(wetland_shp_path).to_crs(epsg=23700)
-    torma_gdf = gpd.read_file(torma_shp_path).to_crs(epsg=23700)
-    kukorica_gdf = gpd.read_file(kukorica_shp_path).to_crs(epsg=23700)
-    dohany1_gdf = gpd.read_file(dohany1_shp_path).to_crs(epsg=23700)
-    dohany2_gdf = gpd.read_file(dohany2_shp_path).to_crs(epsg=23700)
+    # Load shapefiles and ensure CRS is set and converted to EOV CRS
+    forest_gdf = load_shapefile_with_crs(forest_shp_path)
+    waterbody_gdf = load_shapefile_with_crs(waterbody_shp_path)
+    wetland_gdf = load_shapefile_with_crs(wetland_shp_path)
+    torma_gdf = load_shapefile_with_crs(torma_shp_path)
+    kukorica_gdf = load_shapefile_with_crs(kukorica_shp_path)
+    dohany1_gdf = load_shapefile_with_crs(dohany1_shp_path)
+    dohany2_gdf = load_shapefile_with_crs(dohany2_shp_path)
 
     # Create buffers
     forest_buffer = forest_gdf.buffer(buffer_distance)
