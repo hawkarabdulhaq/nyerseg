@@ -16,9 +16,6 @@ st.markdown("""
 This application filters new well locations by excluding those within buffer zones of protected areas and displays the results on an interactive map.
 """)
 
-# Set environment variable to attempt to restore missing .shx files
-os.environ["SHAPE_RESTORE_SHX"] = "YES"
-
 # Set up file paths
 BASE_DIR = os.getcwd()  # Assuming current working directory is root of project
 wells_dir = os.path.join(BASE_DIR, "wells")
@@ -74,34 +71,27 @@ if not os.path.exists(kukorica_shp_path):
         st.error(f"An error occurred while downloading kukorica shapefile: {e}")
         st.stop()
 
-# Function to load and transform shapefiles
-def load_and_transform_shapefile(shp_path, target_crs, source_crs=None):
-    gdf = gpd.read_file(shp_path)
-    if gdf.crs is None:
-        if source_crs is not None:
-            gdf.set_crs(source_crs, inplace=True)
-            st.warning(f"CRS was missing for {shp_path}. Set to {source_crs}.")
-        else:
-            st.error(f"CRS is missing for {shp_path} and source_crs is not provided.")
-            st.stop()
-    gdf = gdf.to_crs(target_crs)
-    return gdf
-
 # Sidebar buffer input
 buffer_distance = st.sidebar.number_input("Buffer Distance (meters)", min_value=0, value=50, step=10)
 
 if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
-    # Target CRS
-    target_crs = 'EPSG:23700'
 
-    # Load and transform shapefiles
-    forest_gdf = load_and_transform_shapefile(forest_shp_path, target_crs, source_crs='EPSG:23700')
-    waterbody_gdf = load_and_transform_shapefile(waterbody_shp_path, target_crs, source_crs='EPSG:23700')
-    wetland_gdf = load_and_transform_shapefile(wetland_shp_path, target_crs, source_crs='EPSG:23700')
-    torma_gdf = load_and_transform_shapefile(torma_shp_path, target_crs, source_crs='EPSG:23700')
-    kukorica_gdf = load_and_transform_shapefile(kukorica_shp_path, target_crs, source_crs='EPSG:23700')
-    dohany1_gdf = load_and_transform_shapefile(dohany1_shp_path, target_crs, source_crs='EPSG:23700')
-    dohany2_gdf = load_and_transform_shapefile(dohany2_shp_path, target_crs, source_crs='EPSG:23700')
+    # Load shapefiles and ensure CRS is set
+    def load_shapefile(path):
+        gdf = gpd.read_file(path)
+        if gdf.crs is None:
+            gdf.set_crs(epsg=23700, inplace=True)
+        else:
+            gdf = gdf.to_crs(epsg=23700)
+        return gdf
+
+    forest_gdf = load_shapefile(forest_shp_path)
+    waterbody_gdf = load_shapefile(waterbody_shp_path)
+    wetland_gdf = load_shapefile(wetland_shp_path)
+    torma_gdf = load_shapefile(torma_shp_path)
+    kukorica_gdf = load_shapefile(kukorica_shp_path)
+    dohany1_gdf = load_shapefile(dohany1_shp_path)
+    dohany2_gdf = load_shapefile(dohany2_shp_path)
 
     # Create buffers
     forest_buffer = forest_gdf.buffer(buffer_distance)
@@ -121,7 +111,7 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
         kukorica_buffer,
         dohany1_buffer,
         dohany2_buffer
-    ], ignore_index=True), crs=target_crs)
+    ], ignore_index=True))
 
     # Read the well data
     realwells_df = pd.read_csv(realwells_path, delimiter='\t', header=None, names=['EOV_X', 'EOV_Y'])
@@ -143,9 +133,13 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
         crs="EPSG:23700"
     )
 
+    # Ensure CRS matches
+    if combined_buffer.crs != newlywells_gdf.crs:
+        combined_buffer = combined_buffer.set_crs(newlywells_gdf.crs, allow_override=True)
+
     # Check if wells are within the buffer areas
     def is_within_buffers(point):
-        return combined_buffer.intersects(point).any()
+        return combined_buffer.contains(point).any()
 
     # Filter out wells that are within the buffers and create a copy
     filtered_newlywells_gdf = newlywells_gdf[~newlywells_gdf.geometry.apply(is_within_buffers)].copy()
@@ -165,59 +159,4 @@ if st.sidebar.button("Run Analysis") or 'filtered_data' not in st.session_state:
     )
 
     realwells_gdf.loc[:, ['Latitude', 'Longitude']] = realwells_gdf.apply(
-        lambda row: eov_to_latlon(row.geometry.x, row.geometry.y), axis=1
-    )
-
-    # Create a Folium map centered around an average location
-    center_lat = (realwells_gdf['Latitude'].mean() + filtered_newlywells_gdf['Latitude'].mean()) / 2
-    center_lon = (realwells_gdf['Longitude'].mean() + filtered_newlywells_gdf['Longitude'].mean()) / 2
-
-    if pd.isnull(center_lat) or pd.isnull(center_lon):
-        st.error("Center coordinates are invalid. Cannot create map.")
-        st.stop()
-
-    wells_map = folium.Map(location=[center_lat, center_lon], zoom_start=10)
-
-    # Add real wells to the map
-    for index, row in realwells_gdf.iterrows():
-        if pd.notnull(row['Latitude']) and pd.notnull(row['Longitude']):
-            folium.CircleMarker(
-                location=(row['Latitude'], row['Longitude']),
-                radius=2,
-                color='red',
-                fill=True,
-                fill_color='red',
-                fill_opacity=0.6
-            ).add_to(wells_map)
-
-    # Add filtered new wells to the map
-    for index, row in filtered_newlywells_gdf.iterrows():
-        if pd.notnull(row['Latitude']) and pd.notnull(row['Longitude']):
-            folium.CircleMarker(
-                location=(row['Latitude'], row['Longitude']),
-                radius=2,
-                color='blue',
-                fill=True,
-                fill_color='blue',
-                fill_opacity=0.6
-            ).add_to(wells_map)
-
-    # Save filtered data and map in session state
-    st.session_state['filtered_data'] = filtered_newlywells_gdf[['EOV_X', 'EOV_Y', 'Latitude', 'Longitude']]
-    st.session_state['map'] = wells_map
-
-# Display the map if it exists in session state
-if 'map' in st.session_state:
-    st.subheader("Filtered Wells Map")
-    st_folium(st.session_state['map'], width=700, height=500)
-
-# Prepare and display the download button if data is available
-if 'filtered_data' in st.session_state:
-    csv = st.session_state['filtered_data'].to_csv(index=False)
-    st.subheader("Download Filtered Wells Data")
-    st.download_button(
-        label="Download CSV",
-        data=csv,
-        file_name='filtered_newlywells.csv',
-        mime='text/csv'
-    )
+        lambda row: eov_to_latlon(row.geometry
