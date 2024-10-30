@@ -1,0 +1,1 @@
+shapefiles/nov_kulturak/kukorica.shp filter=lfs diff=lfs merge=lfs -text
