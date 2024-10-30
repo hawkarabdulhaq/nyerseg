@@ -26,6 +26,7 @@ if not st.session_state.authenticated:
         if input_key == ACCESS_KEY:
             st.session_state.authenticated = True
             st.success("Access granted! You can now use the app.")
+            st.experimental_set_query_params(auth="true")  # Set query param to refresh
         else:
             st.error("Invalid access key. Please try again.")
     st.stop()  # Stop the app here if not authenticated
