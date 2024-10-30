@@ -22,10 +22,11 @@ waterbody_shp_path = os.path.join(shapefiles_dir, "WaterBody_LandCover_Nyerseg_2
 wetland_shp_path = os.path.join(shapefiles_dir, "Wetland_LandCover_Nyerseg_2019", "Wetland_LandCover_Nyerseg_2019.shp")
 
 # Define paths for additional shapefiles in nov_kulturak
-torma_shp_path = os.path.join(shapefiles_dir, "nov_kulturak", "torma.shp")
-kukorica_shp_path = os.path.join(shapefiles_dir, "nov_kulturak", "kukorica.shp")
-dohany1_shp_path = os.path.join(shapefiles_dir, "nov_kulturak", "dohany1.shp")
-dohany2_shp_path = os.path.join(shapefiles_dir, "nov_kulturak", "dohany2.shp")
+nov_kulturak_dir = os.path.join(shapefiles_dir, "nov_kulturak")
+torma_shp_path = os.path.join(nov_kulturak_dir, "torma.shp")
+kukorica_shp_path = os.path.join(nov_kulturak_dir, "kukorica.shp")
+dohany1_shp_path = os.path.join(nov_kulturak_dir, "dohany1.shp")
+dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
 
 st.title("Well Location Analysis with Buffer Zones")
 
