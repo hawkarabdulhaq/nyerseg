@@ -5,3 +5,4 @@ geopandas
 pyproj
 shapely
 streamlit_folium
+gdown
