@@ -8,12 +8,16 @@ import os
 import requests
 import zipfile
 import io
+import glob
 
 st.title("Well Location Analysis with Buffer Zones")
 
 st.markdown("""
 This application filters new well locations by excluding those within buffer zones of protected areas and displays the results on an interactive map.
 """)
+
+# Set environment variable to attempt to restore missing .shx files
+os.environ["SHAPE_RESTORE_SHX"] = "YES"
 
 # Set up file paths
 BASE_DIR = os.getcwd()  # Assuming current working directory is root of project
@@ -35,7 +39,7 @@ torma_shp_path = os.path.join(nov_kulturak_dir, "torma.shp")
 dohany1_shp_path = os.path.join(nov_kulturak_dir, "dohany1.shp")
 dohany2_shp_path = os.path.join(nov_kulturak_dir, "dohany2.shp")
 
-# For kukorica.shp, define the path and the download URL
+# For kukorica.shp, define the path and the correct download URL
 kukorica_shp_path = os.path.join(nov_kulturak_dir, "kukorica.shp")
 kukorica_zip_url = "https://zenodo.org/record/14012851/files/kukorica.zip?download=1"
 
@@ -52,6 +56,20 @@ if not os.path.exists(kukorica_shp_path):
         with zipfile.ZipFile(io.BytesIO(response.content)) as z:
             z.extractall(nov_kulturak_dir)
         st.write("kukorica shapefile downloaded and extracted.")
+
+        # Check if all required files are present
+        extracted_files = glob.glob(os.path.join(nov_kulturak_dir, 'kukorica.*'))
+        required_extensions = ['.shp', '.shx', '.dbf', '.prj']
+        missing_files = []
+
+        for ext in required_extensions:
+            if not any(f.endswith(ext) for f in extracted_files):
+                missing_files.append(f'kukorica{ext}')
+
+        if missing_files:
+            st.error(f"Missing files after extraction: {', '.join(missing_files)}")
+            st.stop()
+
     except Exception as e:
         st.error(f"An error occurred while downloading kukorica shapefile: {e}")
         st.stop()
